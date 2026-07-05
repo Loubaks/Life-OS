@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Life OS" />
+  <title>Life OS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fff; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    input, textarea, button, select { font-family: inherit; }
+    input[type=range] { accent-color: #37352F; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+
+const STORAGE_KEY = "lifeos_notion_v1";
+
+const defaultData = {
+  weightEntries: [],
+  weightGoal: 80,
+  proteinLog: {},
+  proteinGoal: 165,
+  gymLog: {},
+  savings: [
+    { id: 1, name: "MSCI World ETF", monthly: 100, total: 0 },
+    { id: 2, name: "S&P 500 ETF", monthly: 75, total: 0 },
+  ],
+  habits: [
+    { id: 1, name: "Daily Bible", icon: "", streak: 0 },
+    { id: 2, name: "8h Schlaf", icon: "", streak: 0 },
+    { id: 3, name: "Kein Social Media vor 9h", icon: "", streak: 0 },
+    { id: 4, name: "Kaltwasser-Dusche", icon: "", streak: 0 },
+    { id: 5, name: "Journaling", icon: "", streak: 0 },
+  ],
+  habitLog: {},
+  skills: [
+    { id: 1, name: "Trading / Futures", progress: 20, sessions: 0 },
+    { id: 2, name: "Make.com Automations", progress: 45, sessions: 0 },
+    { id: 3, name: "Cinematic Editing", progress: 60, sessions: 0 },
+    { id: 4, name: "Motorrad fahren", progress: 5, sessions: 0 },
+  ],
+  bibleLog: {},
+  savingsGoals: [
+    { id: 1, name: "Motorrad", target: 5000, saved: 0 },
+    { id: 2, name: "Reisen", target: 2000, saved: 0 },
+  ],
+};
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultData;
+    return { ...defaultData, ...JSON.parse(raw) };
+  } catch { return defaultData; }
+}
+
+function saveData(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (d) => new Date(d).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
+
+// ── Notion Design Tokens ──────────────────────────────────────────────────────
+const N = {
+  // Colors — Notion palette
+  bg: "#FFFFFF",
+  bgSecondary: "#F7F6F3",
+  bgHover: "#EFEFEF",
+  border: "#E9E9E7",
+  borderStrong: "#CDCDC9",
+  textPrimary: "#37352F",
+  textSecondary: "#787774",
+  textMuted: "#ABABAB",
+  textWhite: "#FFFFFF",
+  // Accent - use a single warm accent sparingly
+  accent: "#37352F",      // Notion orange
+  accentBg: "#EFEFEF",
+  accentLight: "#F7F6F3",
+  green: "#0F7B6C",
+  greenBg: "#DDEDEA",
+  blue: "#0B6E99",
+  blueBg: "#DDEBF1",
+  red: "#C4554D",
+  redBg: "#FAE8E8",
+  purple: "#6940A5",
+  purpleBg: "#EAE4F2",
+
+  // Typography — Notion uses Inter / system-ui
+  fontBody: `"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+  fontMono: `"SFMono-Regular", Menlo, Consolas, monospace`,
+
+  radius: "4px",
+  radiusMd: "6px",
+};
+
+// Core Notion-style components
+const pageStyle = {
+  background: N.bg,
+  minHeight: "100vh",
+  color: N.textPrimary,
+  fontFamily: N.fontBody,
+  fontSize: "14px",
+  lineHeight: "1.6",
+  paddingBottom: "80px",
+};
+
+const block = {
+  padding: "2px 0",
+  marginBottom: "2px",
+};
+
+const h1 = {
+  fontSize: "28px",
+  fontWeight: "700",
+  color: N.textPrimary,
+  letterSpacing: "-0.02em",
+  lineHeight: "1.2",
+  margin: "0 0 4px 0",
+};
+
+const h2 = {
+  fontSize: "18px",
+  fontWeight: "600",
+  color: N.textPrimary,
+  letterSpacing: "-0.01em",
+  margin: "0 0 12px 0",
+};
+
+const h3 = {
+  fontSize: "13px",
+  fontWeight: "600",
+  color: N.textSecondary,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  margin: "0 0 8px 0",
+};
+
+const divider = {
+  height: "1px",
+  background: N.border,
+  margin: "16px 0",
+};
+
+const tag = (color = N.accent, bg = N.accentBg) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "4px",
+  background: bg,
+  color: color,
+  borderRadius: N.radius,
+  padding: "2px 8px",
+  fontSize: "12px",
+  fontWeight: "500",
+});
+
+const inputStyle = {
+  background: N.bgSecondary,
+  border: `1px solid ${N.border}`,
+  borderRadius: N.radius,
+  padding: "6px 10px",
+  color: N.textPrimary,
+  fontSize: "14px",
+  width: "100%",
+  outline: "none",
+  fontFamily: N.fontBody,
+  boxSizing: "border-box",
+};
+
+const btnPrimary = {
+  background: N.textPrimary,
+  color: N.textWhite,
+  border: "none",
+  borderRadius: N.radius,
+  padding: "6px 14px",
+  fontSize: "13px",
+  fontWeight: "500",
+  cursor: "pointer",
+  fontFamily: N.fontBody,
+  flexShrink: 0,
+};
+
+const btnSecondary = {
+  background: N.bgSecondary,
+  color: N.textSecondary,
+  border: `1px solid ${N.border}`,
+  borderRadius: N.radius,
+  padding: "6px 14px",
+  fontSize: "13px",
+  fontWeight: "500",
+  cursor: "pointer",
+  fontFamily: N.fontBody,
+  flexShrink: 0,
+};
+
+const card = {
+  background: N.bgSecondary,
+  borderRadius: N.radiusMd,
+  padding: "12px 14px",
+  marginBottom: "8px",
+};
+
+const row = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+};
+
+// Progress bar — Notion style (thin, subtle)
+const ProgressBar = ({ value, max, color = N.accent }) => {
+  const pct = Math.min((value / max) * 100, 100);
+  return (
+    <div style={{ height: "3px", background: N.border, borderRadius: "2px", overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "2px", transition: "width 0.3s" }} />
+    </div>
+  );
+};
+
+// Checkbox — Notion style
+const Checkbox = ({ checked, onChange, label }) => (
+  <button onClick={onChange} style={{
+    display: "flex", alignItems: "flex-start", gap: "8px",
+    background: "none", border: "none", cursor: "pointer",
+    color: N.textPrimary, fontFamily: N.fontBody, fontSize: "14px",
+    textAlign: "left", width: "100%", padding: "3px 0",
+  }}>
+    <div style={{
+      width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
+      borderRadius: "3px",
+      background: checked ? N.accent : "transparent",
+      border: `2px solid ${checked ? N.accent : N.borderStrong}`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      transition: "all 0.15s",
+    }}>
+      {checked && <span style={{ color: "#fff", fontSize: "10px", fontWeight: "700" }}></span>}
+    </div>
+    <span style={{ color: checked ? N.textMuted : N.textPrimary, textDecoration: checked ? "line-through" : "none" }}>
+      {label}
+    </span>
+  </button>
+);
+
+// NAV
+const NAV = [
+  { id: "dashboard", icon: null, label: "Home" },
+  { id: "body", icon: null, label: "Körper" },
+  { id: "gym", icon: null, label: "Gym" },
+  { id: "finance", icon: null, label: "Geld" },
+  { id: "habits", icon: null, label: "Habits" },
+  { id: "skills", icon: null, label: "Skills" },
+  { id: "bible", icon: null, label: "Bible" },
+];
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+function Dashboard({ data, setData }) {
+  const t = today();
+  const todayHabits = data.habitLog[t] || {};
+  const doneHabits = data.habits.filter(h => todayHabits[h.id]).length;
+  const totalSavings = data.savings.reduce((s, x) => s + x.monthly, 0);
+  const latestWeight = data.weightEntries.length ? data.weightEntries[data.weightEntries.length - 1].weight : null;
+  const todayProtein = data.proteinLog[t] || 0;
+  const bibleToday = data.bibleLog[t];
+
+  const thisWeekGym = (() => {
+    let count = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      if (data.gymLog[d.toISOString().slice(0, 10)]?.done) count++;
+    }
+    return count;
+  })();
+
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      {/* Page header — Notion style */}
+      <div style={{ marginBottom: "24px" }}>
+        
+        <h1 style={h1}>{greeting}, Loubaks</h1>
+        <p style={{ color: N.textSecondary, margin: "4px 0 0", fontSize: "14px" }}>
+          {now.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </p>
+      </div>
+
+      <div style={divider} />
+
+      {/* Today's habits — inline checklist */}
+      <div style={{ marginBottom: "20px" }}>
+        <h3 style={h3}>Heute</h3>
+        <div style={{ ...card, padding: "10px 14px" }}>
+          <div style={{ ...row, marginBottom: "10px" }}>
+            <span style={{ fontSize: "13px", color: N.textSecondary }}>{doneHabits}/{data.habits.length} erledigt</span>
+            <span style={tag(doneHabits === data.habits.length ? N.green : N.accent, doneHabits === data.habits.length ? N.greenBg : N.accentBg)}>
+              {doneHabits === data.habits.length ? " Perfect day" : `${Math.round((doneHabits / Math.max(data.habits.length, 1)) * 100)}%`}
+            </span>
+          </div>
+          <ProgressBar value={doneHabits} max={Math.max(data.habits.length, 1)} color={doneHabits === data.habits.length ? N.green : N.accent} />
+          <div style={{ marginTop: "10px" }}>
+            {data.habits.map(h => {
+              const done = !!todayHabits[h.id];
+              return (
+                <Checkbox key={h.id} checked={done} label={h.name}
+                  onChange={() => {
+                    const newLog = { ...data.habitLog, [t]: { ...todayHabits, [h.id]: !done } };
+                    setData(d => ({ ...d, habitLog: newLog }));
+                  }} />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{ marginBottom: "20px" }}>
+        <h3 style={h3}>Überblick</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          {[
+            { label: "Gym diese Woche", value: `${thisWeekGym}x` },
+            { label: "Protein heute", value: `${todayProtein}g`, sub: `/ ${data.proteinGoal}g` },
+            { label: "Gewicht", value: latestWeight ? `${latestWeight} kg` : "—", sub: `Ziel: ${data.weightGoal}kg` },
+            { label: "Sparrate", value: `${totalSavings}€`, sub: "pro Monat" },
+          ].map(item => (
+            <div key={item.label} style={card}>
+                            <div style={{ fontSize: "20px", fontWeight: "700", color: N.textPrimary, lineHeight: 1 }}>{item.value}</div>
+              {item.sub && <div style={{ fontSize: "11px", color: N.textMuted, marginTop: "2px" }}>{item.sub}</div>}
+              <div style={{ fontSize: "11px", color: N.textSecondary, marginTop: "4px", fontWeight: "500" }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bible */}
+      <div style={{ marginBottom: "20px" }}>
+        <h3 style={h3}>Daily Bible</h3>
+        <div style={{ ...card, borderLeft: `3px solid ${N.accent}`, background: N.accentLight, borderRadius: `0 ${N.radiusMd} ${N.radiusMd} 0` }}>
+          {bibleToday?.verse ? (
+            <>
+              <p style={{ margin: "0 0 4px", fontStyle: "italic", color: N.textPrimary, fontSize: "14px" }}>"{bibleToday.verse}"</p>
+              {bibleToday.reflection && <p style={{ margin: 0, fontSize: "13px", color: N.textSecondary }}>{bibleToday.reflection}</p>}
+            </>
+          ) : (
+            <p style={{ margin: 0, color: N.textSecondary, fontSize: "13px" }}>Noch kein Vers heute. Öffne den Bible Tab. </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BODY ─────────────────────────────────────────────────────────────────────
+function Body({ data, setData }) {
+  const [weightInput, setWeightInput] = useState("");
+  const [proteinInput, setProteinInput] = useState("");
+  const t = today();
+  const todayProtein = data.proteinLog[t] || 0;
+  const latestWeight = data.weightEntries.length ? data.weightEntries[data.weightEntries.length - 1].weight : null;
+  const startWeight = data.weightEntries.length ? data.weightEntries[0].weight : null;
+  const diff = latestWeight && startWeight ? +(latestWeight - startWeight).toFixed(1) : null;
+
+  const addWeight = () => {
+    const w = parseFloat(weightInput);
+    if (!w) return;
+    const entries = [...data.weightEntries.filter(e => e.date !== t), { date: t, weight: w }].sort((a, b) => a.date.localeCompare(b.date));
+    setData(d => ({ ...d, weightEntries: entries }));
+    setWeightInput("");
+  };
+
+  const addProtein = (extra = 0) => {
+    const p = extra || parseInt(proteinInput);
+    if (!p) return;
+    setData(d => ({ ...d, proteinLog: { ...d.proteinLog, [t]: (d.proteinLog[t] || 0) + p } }));
+    if (!extra) setProteinInput("");
+  };
+
+  const QUICK = [
+    { label: "Hühnerbrust 150g", g: 45 },
+    { label: "Whey Shake", g: 25 },
+    { label: "Eier ×3", g: 18 },
+    { label: "Skyr 200g", g: 20 },
+    { label: "Thunfisch Dose", g: 30 },
+    { label: "Hähnchen 200g", g: 58 },
+  ];
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        
+        <h1 style={h1}>Körper</h1>
+      </div>
+      <div style={divider} />
+
+      {/* Weight */}
+      <h3 style={h3}>Gewicht</h3>
+      <div style={card}>
+        <div style={{ ...row, marginBottom: "10px" }}>
+          <div>
+            <span style={{ fontSize: "28px", fontWeight: "700" }}>{latestWeight || "—"}</span>
+            <span style={{ color: N.textSecondary, marginLeft: "4px" }}>kg</span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "12px", color: N.textSecondary }}>Ziel</div>
+            <div style={{ fontSize: "18px", fontWeight: "600" }}>{data.weightGoal} kg</div>
+          </div>
+        </div>
+        {diff !== null && (
+          <div style={{ marginBottom: "10px" }}>
+            <span style={tag(diff <= 0 ? N.green : N.red, diff <= 0 ? N.greenBg : N.redBg)}>
+              {diff <= 0 ? "" : ""} {Math.abs(diff)}kg seit Start
+            </span>
+          </div>
+        )}
+        <ProgressBar value={data.weightGoal} max={latestWeight || data.weightGoal} color={N.accent} />
+        <div style={{ ...row, marginTop: "12px", gap: "8px" }}>
+          <input style={inputStyle} placeholder="Gewicht (kg)" type="number" value={weightInput}
+            onChange={e => setWeightInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addWeight()} />
+          <button style={btnPrimary} onClick={addWeight}>Eintragen</button>
+        </div>
+      </div>
+
+      {/* Weight history mini */}
+      {data.weightEntries.length > 1 && (
+        <div style={{ ...card, marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: N.textSecondary, marginBottom: "8px", fontWeight: "500" }}>Verlauf (letzte 14 Einträge)</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "44px" }}>
+            {data.weightEntries.slice(-14).map((e, i, arr) => {
+              const vals = arr.map(x => x.weight);
+              const min = Math.min(...vals) - 0.5, max = Math.max(...vals) + 0.5;
+              const h = ((e.weight - min) / (max - min)) * 100;
+              const isLast = i === arr.length - 1;
+              return (
+                <div key={i} title={`${e.weight}kg — ${fmtDate(e.date)}`} style={{
+                  flex: 1, background: isLast ? N.accent : N.border,
+                  height: `${Math.max(h, 8)}%`, borderRadius: "2px 2px 0 0", cursor: "default",
+                }} />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={divider} />
+
+      {/* Protein */}
+      <h3 style={h3}>Protein heute</h3>
+      <div style={card}>
+        <div style={{ ...row, marginBottom: "8px" }}>
+          <div>
+            <span style={{ fontSize: "28px", fontWeight: "700", color: todayProtein >= data.proteinGoal ? N.green : N.textPrimary }}>{todayProtein}</span>
+            <span style={{ color: N.textSecondary, marginLeft: "4px" }}>g</span>
+          </div>
+          <span style={{ fontSize: "13px", color: N.textSecondary }}>/ {data.proteinGoal}g</span>
+        </div>
+        <ProgressBar value={todayProtein} max={data.proteinGoal} color={todayProtein >= data.proteinGoal ? N.green : N.accent} />
+        <div style={{ ...row, marginTop: "12px", gap: "8px" }}>
+          <input style={inputStyle} placeholder="Protein (g)" type="number" value={proteinInput}
+            onChange={e => setProteinInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addProtein()} />
+          <button style={btnPrimary} onClick={() => addProtein()}>+</button>
+        </div>
+        <div style={{ marginTop: "10px" }}>
+          <div style={{ fontSize: "12px", color: N.textSecondary, marginBottom: "6px" }}>Schnell hinzufügen</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+            {QUICK.map(q => (
+              <button key={q.label} onClick={() => addProtein(q.g)} style={{
+                ...btnSecondary, padding: "4px 10px", fontSize: "12px", flexShrink: 0,
+              }}>
+                +{q.g}g {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {todayProtein > 0 && (
+          <button onClick={() => setData(d => ({ ...d, proteinLog: { ...d.proteinLog, [t]: 0 } }))} style={{
+            marginTop: "10px", background: "none", border: "none", color: N.textMuted,
+            fontSize: "12px", cursor: "pointer", fontFamily: N.fontBody,
+          }}>
+            Zurücksetzen
+          </button>
+        )}
+      </div>
+
+      <div style={divider} />
+
+      {/* Creatin */}
+      <h3 style={h3}>Creatin heute</h3>
+      <div style={card}>
+        <div style={{ ...row, marginBottom: "8px" }}>
+          <div>
+            <span style={{ fontSize: "28px", fontWeight: "700", color: (data.creatinLog || {})[t] ? N.green : N.textPrimary }}>
+              {(data.creatinLog || {})[t] ? "5g" : "—"}
+            </span>
+          </div>
+          <span style={tag((data.creatinLog || {})[t] ? N.green : N.textMuted, (data.creatinLog || {})[t] ? N.greenBg : N.bgSecondary)}>
+            {(data.creatinLog || {})[t] ? "Eingenommen" : "Noch nicht"}
+          </span>
+        </div>
+        <button onClick={() => setData(d => ({ ...d, creatinLog: { ...(d.creatinLog || {}), [t]: !(d.creatinLog || {})[t] } }))}
+          style={{
+            width: "100%", padding: "8px",
+            background: (data.creatinLog || {})[t] ? N.greenBg : N.bgSecondary,
+            border: `1px solid ${(data.creatinLog || {})[t] ? N.green : N.border}`,
+            borderRadius: N.radius, cursor: "pointer", fontFamily: N.fontBody,
+            fontSize: "13px", fontWeight: "600",
+            color: (data.creatinLog || {})[t] ? N.green : N.textSecondary,
+          }}>
+          {(data.creatinLog || {})[t] ? "Als nicht eingenommen markieren" : "5g Creatin eingenommen"}
+        </button>
+        <div style={{ fontSize: "11px", color: N.textMuted, marginTop: "8px" }}>
+          Täglich 5g — egal ob Training oder nicht. Am besten mit Protein-Shake oder nach dem Essen.
+        </div>
+      </div>
+
+      <div style={divider} />
+
+      {/* Goals */}
+      <h3 style={h3}>Ziele anpassen</h3>
+      <div style={card}>
+        {[
+          { label: "Gewichtsziel (kg)", field: "weightGoal", type: "number" },
+          { label: "Protein-Ziel (g/Tag)", field: "proteinGoal", type: "number" },
+        ].map(f => (
+          <div key={f.field} style={{ ...row, marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", color: N.textSecondary, minWidth: "140px" }}>{f.label}</span>
+            <input style={{ ...inputStyle, maxWidth: "90px", textAlign: "right" }} type={f.type}
+              value={data[f.field]}
+              onChange={e => setData(d => ({ ...d, [f.field]: parseFloat(e.target.value) || d[f.field] }))} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── GYM ──────────────────────────────────────────────────────────────────────
+function Gym({ data, setData }) {
+  const t = today();
+  const todayGym = data.gymLog[t] || { done: false, workout: "" };
+  const [workoutInput, setWorkoutInput] = useState(todayGym.workout || "");
+
+  const totalSessions = Object.values(data.gymLog).filter(v => v.done).length;
+  const thisWeek = (() => {
+    let count = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      if (data.gymLog[d.toISOString().slice(0, 10)]?.done) count++;
+    }
+    return count;
+  })();
+
+  const last14 = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (13 - i));
+    const key = d.toISOString().slice(0, 10);
+    return { key, done: !!data.gymLog[key]?.done, isToday: key === t, label: d.toLocaleDateString("de-DE", { weekday: "short" }).slice(0, 2) };
+  });
+
+  const WORKOUTS = ["Push", "Pull", "Legs", "Upper Body", "Full Body", "Cardio", "Core & Mobility"];
+
+  const toggleGym = () => {
+    setData(d => ({ ...d, gymLog: { ...d.gymLog, [t]: { done: !todayGym.done, workout: workoutInput } } }));
+  };
+
+  const saveWorkout = (w) => {
+    setWorkoutInput(w);
+    setData(d => ({ ...d, gymLog: { ...d.gymLog, [t]: { ...d.gymLog[t], workout: w } } }));
+  };
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        
+        <h1 style={h1}>Gym</h1>
+      </div>
+      <div style={divider} />
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+        <div style={card}>
+          <div style={{ fontSize: "22px", fontWeight: "700" }}>{totalSessions}</div>
+          <div style={{ fontSize: "12px", color: N.textSecondary, marginTop: "2px" }}>Sessions gesamt</div>
+        </div>
+        <div style={card}>
+          <div style={{ fontSize: "22px", fontWeight: "700" }}>{thisWeek}</div>
+          <div style={{ fontSize: "12px", color: N.textSecondary, marginTop: "2px" }}>Diese Woche</div>
+        </div>
+      </div>
+
+      {/* 14-day heatmap */}
+      <h3 style={h3}>Letzte 2 Wochen</h3>
+      <div style={{ ...card, marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "4px" }}>
+          {last14.map(day => (
+            <div key={day.key} style={{ flex: 1, textAlign: "center" }}>
+              <div style={{
+                height: "26px", borderRadius: N.radius,
+                background: day.done ? N.accent : day.isToday ? N.border : N.bgSecondary,
+                border: day.isToday ? `1px solid ${N.borderStrong}` : `1px solid ${N.border}`,
+                marginBottom: "3px",
+              }} />
+              <div style={{ fontSize: "9px", color: N.textMuted }}>{day.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Today */}
+      <h3 style={h3}>Heute</h3>
+      <div style={card}>
+        <Checkbox
+          checked={todayGym.done}
+          onChange={toggleGym}
+          label={todayGym.done ? "Training abgeschlossen" : "Training als erledigt markieren"}
+        />
+      </div>
+
+      {/* History */}
+      <div style={divider} />
+      <h3 style={h3}>Letzte Sessions</h3>
+      {Object.entries(data.gymLog).filter(([, v]) => v.done).sort(([a], [b]) => b.localeCompare(a)).slice(0, 6).map(([date, v]) => (
+        <div key={date} style={{ ...row, padding: "8px 0", borderBottom: `1px solid ${N.border}` }}>
+          <div>
+            <span style={{ fontSize: "13px", fontWeight: "500" }}>{v.workout || "Training"}</span>
+          </div>
+          <span style={{ fontSize: "12px", color: N.textMuted }}>{fmtDate(date)}</span>
+        </div>
+      ))}
+
+      {/* Training Plan */}
+      <div style={divider} />
+      <h3 style={h3}>Trainingsplan</h3>
+      <p style={{ fontSize: "12px", color: N.textSecondary, margin: "0 0 12px" }}>
+        Mo–Fr Programm — Power, Fat Loss & Athletik. Vor jedem Training 5 Min dynamisches Aufwärmen (Kniebeugen, Ausfallschritte, Armkreisen).
+      </p>
+      {[
+        {
+          day: "Montag", title: "Lower Body Power",
+          note: "Schwerster Tag der Woche — frisch vom Wochenende, maximale Kraft aufbauen.",
+          exercises: [
+            { name: "Trap Bar Deadlifts", sets: "4 x 5", note: "Maximale Power in Gesäß und Hamstrings, weniger Druck auf den unteren Rücken als mit Langhantel." },
+            { name: "Dumbbell Jump Squats", sets: "3 x 5", note: "Leichte Hanteln (10–15 kg gesamt). Tief in die Kniebeuge, dann so hoch wie möglich springen — Kraft in Sprungpower umwandeln." },
+            { name: "Goblet Reverse Lunges", sets: "3 x 8 pro Bein", note: "Einbeinige Kraft schützt die Knie und ist entscheidend für Drives zum Korb." },
+            { name: "Leg Curls (Maschine)", sets: "3 x 12", note: "Stärkt die Hamstrings — Verletzungsprävention bei schnellen Richtungswechseln." },
+          ],
+        },
+        {
+          day: "Mittwoch", title: "Upper Body Push / Pull",
+          note: "Starker Oberkörper für Körperkontakt unter dem Korb und Passstärke.",
+          exercises: [
+            { name: "Incline Dumbbell Bench Press", sets: "4 x 6–8", note: "Brust und Schultern aufbauen — sicherer für Basketballspieler-Schultern als flache Langhantel." },
+            { name: "Chest-Supported Rows", sets: "4 x 8", note: "Dicker oberer Rücken hilft dir, gegen Verteidiger standzuhalten und verbessert die Körperhaltung." },
+            { name: "Dumbbell Overhead Push Press", sets: "3 x 5", note: "Knie leicht beugen, dann explosiv nach oben drücken — Ober- und Unterkörper als Einheit trainieren." },
+            { name: "Lat Pulldowns", sets: "3 x 10–12", note: "" },
+            { name: "Face Pulls (Kabel)", sets: "3 x 15", note: "Schützt die Schultern vor dem Verschleiß durch Werfen und Rebound-Sprünge." },
+          ],
+        },
+        {
+          day: "Donnerstag", title: "Lower Body Agility & Elasticity",
+          note: "Schnelligkeit, laterale Beweglichkeit und Core-Stabilität vor dem Abendtraining.",
+          exercises: [
+            { name: "Goblet Box Squats", sets: "4 x 6", note: "Auf eine Bank/Box hinabsetzen, 1 Sekunde pausieren, dann explosiv nach oben. Trainiert die Start-Stopp-Power für schnelle erste Schritte." },
+            { name: "Romanian Deadlifts (RDLs)", sets: "3 x 8", note: "Hamstrings und unterer Rücken stark halten — wirkt wie Rüstung für die Knie." },
+            { name: "Lateral Bounds (Skater Jumps)", sets: "3 x 6 pro Seite", note: "Seitwärts von Fuß zu Fuß springen, Landung kurz halten. Direkter Übertrag auf laterale Schnelligkeit und defensives Gleiten." },
+            { name: "Hanging Leg Raises / Captain's Chair", sets: "3 x max", note: "Core-Stabilität — damit du bei Kontakt in der Luft nicht aus der Bahn geworfen wirst." },
+          ],
+        },
+        {
+          day: "Freitag", title: "Upper Body Hypertrophy",
+          note: "Beine sind nach Donnerstagabend müde — heute nur Oberkörper formen und extra Kalorien verbrennen.",
+          exercises: [
+            { name: "Lat Pulldowns / Assisted Pull-Ups", sets: "4 x 8–10", note: "" },
+            { name: "Dumbbell Flat Bench Press", sets: "3 x 10", note: "" },
+            { name: "Dumbbell Lateral Raises", sets: "4 x 12–15", note: "Breite Schultern — macht dich athletischer und größer wirkend." },
+            { name: "Tricep Rope Pushdowns", sets: "3 x 12", note: "" },
+            { name: "Dumbbell Bicep Curls", sets: "3 x 12", note: "" },
+            { name: "Plank", sets: "3 x 45–60 Sek", note: "" },
+          ],
+        },
+      ].map((session, si) => (
+        <TrainingDay key={si} session={session} />
+      ))}
+    </div>
+  );
+}
+
+function TrainingDay({ session }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: "8px" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", background: N.bgSecondary, border: `1px solid ${N.border}`,
+        borderRadius: N.radiusMd, padding: "10px 14px", cursor: "pointer",
+        fontFamily: N.fontBody, textAlign: "left",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: N.accent, marginRight: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{session.day}</span>
+          <span style={{ fontSize: "13px", fontWeight: "600", color: N.textPrimary }}>{session.title}</span>
+        </div>
+        <span style={{ fontSize: "12px", color: N.textMuted, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ border: `1px solid ${N.border}`, borderTop: "none", borderRadius: `0 0 ${N.radiusMd} ${N.radiusMd}`, padding: "10px 14px", background: N.bg }}>
+          {session.note && (
+            <p style={{ fontSize: "12px", color: N.textSecondary, margin: "0 0 10px", fontStyle: "italic" }}>{session.note}</p>
+          )}
+          {session.exercises.map((ex, i) => (
+            <div key={i} style={{ paddingBottom: "8px", marginBottom: "8px", borderBottom: i < session.exercises.length - 1 ? `1px solid ${N.border}` : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "2px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: N.textPrimary }}>{ex.name}</span>
+                <span style={{ fontSize: "12px", fontWeight: "500", color: N.accent, flexShrink: 0, marginLeft: "8px" }}>{ex.sets}</span>
+              </div>
+              {ex.note && <p style={{ fontSize: "12px", color: N.textSecondary, margin: 0, lineHeight: "1.5" }}>{ex.note}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FINANCE ───────────────────────────────────────────────────────────────────
+function Finance({ data, setData }) {
+  const [deposit, setDeposit] = useState({});
+  const [editMode, setEditMode] = useState(false);
+  const [projYears, setProjYears] = useState(10);
+
+  const totalMonthly = data.savings.reduce((s, x) => s + x.monthly, 0);
+  const totalInvested = data.savings.reduce((s, x) => s + x.total, 0);
+
+  const project = (monthly, years = 10, rate = 0.07) => {
+    let total = 0;
+    for (let m = 0; m < years * 12; m++) total = total * (1 + rate / 12) + monthly;
+    return Math.round(total);
+  };
+
+  const addDeposit = (id) => {
+    const amt = parseFloat(deposit[id]);
+    if (!amt) return;
+    setData(d => ({ ...d, savings: d.savings.map(s => s.id === id ? { ...s, total: s.total + amt } : s) }));
+    setDeposit(d => ({ ...d, [id]: "" }));
+  };
+
+  const COLORS = ["#D9730D", N.blue, N.textPrimary, N.textPrimary];
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        <h1 style={h1}>Finanzen</h1>
+      </div>
+      <div style={divider} />
+
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+        {[
+          { label: "Monatlich", value: `${totalMonthly}€` },
+          { label: "Investiert", value: `${totalInvested.toLocaleString("de-DE")}€` },
+        ].map(item => (
+          <div key={item.label} style={card}>
+            <div style={{ fontSize: "18px", fontWeight: "700", letterSpacing: "-0.02em" }}>{item.value}</div>
+            <div style={{ fontSize: "11px", color: N.textSecondary, marginTop: "2px" }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Projection slider */}
+      <div style={{ ...card, marginBottom: "16px" }}>
+        <div style={{ ...row, marginBottom: "10px" }}>
+          <div>
+            <div style={{ fontSize: "11px", color: N.textSecondary, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>Prognose in {projYears} Jahren</div>
+            <div style={{ fontSize: "28px", fontWeight: "700", letterSpacing: "-0.02em", color: N.accent }}>
+              {(project(totalMonthly, projYears) / 1000).toFixed(0)}k€
+            </div>
+            <div style={{ fontSize: "11px", color: N.textMuted, marginTop: "2px" }}>bei 7% p.a. · alle Sparpläne</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "11px", color: N.textSecondary, marginBottom: "2px" }}>Eingezahlt</div>
+            <div style={{ fontSize: "16px", fontWeight: "600" }}>{(totalMonthly * projYears * 12).toLocaleString("de-DE")}€</div>
+            <div style={{ fontSize: "11px", color: N.green, marginTop: "2px" }}>
+              +{((project(totalMonthly, projYears) - totalMonthly * projYears * 12) / 1000).toFixed(0)}k€ Rendite
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "11px", color: N.textMuted, flexShrink: 0 }}>1J</span>
+          <input type="range" min="1" max="40" step="1" value={projYears}
+            onChange={e => setProjYears(+e.target.value)}
+            style={{ flex: 1, accentColor: N.accent }} />
+          <span style={{ fontSize: "11px", color: N.textMuted, flexShrink: 0 }}>40J</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+          {[5, 10, 15, 20, 30].map(y => (
+            <button key={y} onClick={() => setProjYears(y)} style={{
+              background: projYears === y ? N.accentBg : "none",
+              border: `1px solid ${projYears === y ? N.accent : N.border}`,
+              borderRadius: N.radius, padding: "3px 8px",
+              fontSize: "11px", fontWeight: "600",
+              color: projYears === y ? N.accent : N.textMuted,
+              cursor: "pointer", fontFamily: N.fontBody,
+            }}>{y}J</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Savings plans */}
+      <div style={{ ...row, marginBottom: "10px" }}>
+        <h3 style={{ ...h3, margin: 0 }}>Sparpläne</h3>
+        <button onClick={() => setEditMode(e => !e)} style={{ ...btnSecondary, padding: "3px 10px", fontSize: "12px" }}>
+          {editMode ? "Fertig" : "Bearbeiten"}
+        </button>
+      </div>
+
+      {data.savings.map((s, idx) => (
+        <div key={s.id} style={{ ...card, borderLeft: `3px solid ${COLORS[idx % COLORS.length]}`, borderRadius: `0 ${N.radiusMd} ${N.radiusMd} 0` }}>
+          <div style={{ ...row, marginBottom: "8px" }}>
+            <div style={{ flex: 1 }}>
+              {editMode ? (
+                <input style={{ ...inputStyle, marginBottom: "4px", fontWeight: "600" }} value={s.name}
+                  onChange={e => setData(d => ({ ...d, savings: d.savings.map(x => x.id === s.id ? { ...x, name: e.target.value } : x) }))} />
+              ) : (
+                <div style={{ fontSize: "14px", fontWeight: "600" }}>{s.name}</div>
+              )}
+              <div style={{ fontSize: "12px", color: N.textSecondary }}>
+                {s.total > 0 ? `${s.total.toLocaleString("de-DE")}€ investiert` : "Noch nichts geloggt"}
+              </div>
+            </div>
+            {editMode ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <input style={{ ...inputStyle, maxWidth: "70px", textAlign: "right" }} type="number" value={s.monthly}
+                  onChange={e => setData(d => ({ ...d, savings: d.savings.map(x => x.id === s.id ? { ...x, monthly: parseFloat(e.target.value) || 0 } : x) }))} />
+                <button onClick={() => setData(d => ({ ...d, savings: d.savings.filter(x => x.id !== s.id) }))}
+                  style={{ background: "none", border: "none", color: N.red, cursor: "pointer", fontSize: "18px", fontWeight: "700", padding: "0 4px" }}>
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "20px", fontWeight: "700", color: COLORS[idx % COLORS.length] }}>{s.monthly}€</div>
+                <div style={{ fontSize: "11px", color: N.textMuted }}>/ Mo</div>
+              </div>
+            )}
+          </div>
+
+          {/* Per-plan projection for selected years */}
+          <div style={{ display: "flex", gap: "16px", marginBottom: "8px", paddingBottom: "8px", borderBottom: `1px solid ${N.border}` }}>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: COLORS[idx % COLORS.length] }}>
+                {(project(s.monthly, projYears) / 1000).toFixed(1)}k€
+              </div>
+              <div style={{ fontSize: "10px", color: N.textMuted }}>in {projYears} Jahren</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: N.textSecondary }}>
+                {(s.monthly * projYears * 12).toLocaleString("de-DE")}€
+              </div>
+              <div style={{ fontSize: "10px", color: N.textMuted }}>eingezahlt</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: N.green }}>
+                +{((project(s.monthly, projYears) - s.monthly * projYears * 12) / 1000).toFixed(1)}k€
+              </div>
+              <div style={{ fontSize: "10px", color: N.textMuted }}>Rendite</div>
+            </div>
+          </div>
+
+          {/* Deposit */}
+          <div style={{ ...row, gap: "6px" }}>
+            <input style={{ ...inputStyle, fontSize: "13px" }} type="number" placeholder="Einzahlung (€)"
+              value={deposit[s.id] || ""}
+              onChange={e => setDeposit(d => ({ ...d, [s.id]: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && addDeposit(s.id)} />
+            <button style={{ ...btnSecondary, padding: "6px 12px", fontSize: "13px" }} onClick={() => addDeposit(s.id)}>
+              Einzahlen
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Add new plan */}
+      {editMode && (
+        <AddSavingsPlan setData={setData} />
+      )}
+
+      {/* Savings Goals */}
+      <div style={divider} />
+      <div style={{ ...row, marginBottom: "10px" }}>
+        <h3 style={{ ...h3, margin: 0 }}>Sparziele</h3>
+        <button onClick={() => setEditMode(e => !e)} style={{ ...btnSecondary, padding: "3px 10px", fontSize: "12px" }}>
+          {editMode ? "Fertig" : "Bearbeiten"}
+        </button>
+      </div>
+      <p style={{ fontSize: "12px", color: N.textMuted, margin: "-4px 0 12px" }}>Konkrete Ziele — Motorrad, Reisen, Notgroschen...</p>
+
+      {(data.savingsGoals || []).map(g => {
+        const pct = Math.min((g.saved / g.target) * 100, 100);
+        const remaining = Math.max(g.target - g.saved, 0);
+        return (
+          <div key={g.id} style={card}>
+            <div style={{ ...row, marginBottom: "6px" }}>
+              <div style={{ flex: 1 }}>
+                {editMode ? (
+                  <div style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
+                    <input style={inputStyle} value={g.name}
+                      onChange={e => setData(d => ({ ...d, savingsGoals: (d.savingsGoals || []).map(x => x.id === g.id ? { ...x, name: e.target.value } : x) }))} />
+                    <input style={{ ...inputStyle, maxWidth: "80px", textAlign: "right" }} type="number" value={g.target} placeholder="Ziel €"
+                      onChange={e => setData(d => ({ ...d, savingsGoals: (d.savingsGoals || []).map(x => x.id === g.id ? { ...x, target: parseFloat(e.target.value) || 0 } : x) }))} />
+                    <button onClick={() => setData(d => ({ ...d, savingsGoals: (d.savingsGoals || []).filter(x => x.id !== g.id) }))}
+                      style={{ background: "none", border: "none", color: N.red, cursor: "pointer", fontSize: "18px", fontWeight: "700", padding: "0 4px" }}>×</button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "14px", fontWeight: "600" }}>{g.name}</div>
+                )}
+                <div style={{ fontSize: "12px", color: N.textSecondary }}>
+                  {g.saved.toLocaleString("de-DE")}€ / {g.target.toLocaleString("de-DE")}€ — noch {remaining.toLocaleString("de-DE")}€
+                </div>
+              </div>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: pct >= 100 ? N.green : N.textPrimary }}>{Math.round(pct)}%</div>
+            </div>
+            <ProgressBar value={g.saved} max={g.target} color={pct >= 100 ? N.green : N.textPrimary} />
+            <div style={{ ...row, gap: "6px", marginTop: "10px" }}>
+              <input style={{ ...inputStyle, fontSize: "13px" }} type="number" placeholder="Betrag hinzufügen (€)"
+                id={`goal-${g.id}`}
+                onKeyDown={e => { if (e.key === "Enter") { const v = parseFloat(e.target.value); if (v) { setData(d => ({ ...d, savingsGoals: (d.savingsGoals || []).map(x => x.id === g.id ? { ...x, saved: x.saved + v } : x) })); e.target.value = ""; } } }} />
+              <button style={{ ...btnSecondary, padding: "6px 12px", fontSize: "13px" }}
+                onClick={() => { const el = document.getElementById(`goal-${g.id}`); const v = parseFloat(el?.value); if (v) { setData(d => ({ ...d, savingsGoals: (d.savingsGoals || []).map(x => x.id === g.id ? { ...x, saved: x.saved + v } : x) })); if (el) el.value = ""; } }}>
+                Einzahlen
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {editMode && <AddSavingsGoal setData={setData} />}
+
+    </div>
+  );
+}
+
+function AddSavingsPlan({ setData }) {
+  const [name, setName] = useState("");
+  const [monthly, setMonthly] = useState("");
+
+  const add = () => {
+    if (!name.trim() || !monthly) return;
+    setData(d => ({ ...d, savings: [...d.savings, { id: Date.now(), name, monthly: parseFloat(monthly), total: 0 }] }));
+    setName(""); setMonthly("");
+  };
+
+  return (
+    <div style={{ ...card, borderStyle: "dashed", borderColor: N.borderStrong, background: N.bg }}>
+      <div style={{ fontSize: "12px", fontWeight: "600", color: N.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Neuer Sparplan</div>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+        <input style={inputStyle} placeholder="Name (z.B. Gold ETF)" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+      </div>
+      <div style={{ display: "flex", gap: "6px" }}>
+        <input style={inputStyle} type="number" placeholder="Sparrate (€/Mo)" value={monthly} onChange={e => setMonthly(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+        <button style={btnPrimary} onClick={add}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+function AddSavingsGoal({ setData }) {
+  const [name, setName] = useState("");
+  const [target, setTarget] = useState("");
+
+  const add = () => {
+    if (!name.trim() || !target) return;
+    setData(d => ({ ...d, savingsGoals: [...(d.savingsGoals || []), { id: Date.now(), name, target: parseFloat(target), saved: 0 }] }));
+    setName(""); setTarget("");
+  };
+
+  return (
+    <div style={{ ...card, borderStyle: "dashed", borderColor: N.borderStrong, background: N.bg }}>
+      <div style={{ fontSize: "12px", fontWeight: "600", color: N.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Neues Sparziel</div>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+        <input style={inputStyle} placeholder="Name (z.B. Motorrad, Reisen)" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+      </div>
+      <div style={{ display: "flex", gap: "6px" }}>
+        <input style={inputStyle} type="number" placeholder="Zielbetrag (€)" value={target} onChange={e => setTarget(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+        <button style={btnPrimary} onClick={add}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+// ── HABITS ────────────────────────────────────────────────────────────────────
+function Habits({ data, setData }) {
+  const t = today();
+  const todayHabits = data.habitLog[t] || {};
+  const [newHabit, setNewHabit] = useState("");
+
+  const getStreak = (id) => {
+    let s = 0, d = new Date();
+    while (data.habitLog[d.toISOString().slice(0, 10)]?.[id]) { s++; d.setDate(d.getDate() - 1); }
+    return s;
+  };
+
+  const toggleHabit = (id) => {
+    setData(d => ({ ...d, habitLog: { ...d.habitLog, [t]: { ...todayHabits, [id]: !todayHabits[id] } } }));
+  };
+
+  const addHabit = () => {
+    if (!newHabit.trim()) return;
+    setData(d => ({ ...d, habits: [...d.habits, { id: Date.now(), name: newHabit, icon: "", streak: 0 }] }));
+    setNewHabit("");
+  };
+
+  const doneCount = data.habits.filter(h => todayHabits[h.id]).length;
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        
+        <h1 style={h1}>Habits</h1>
+        <p style={{ color: N.textSecondary, margin: "4px 0 0", fontSize: "14px" }}>
+          {doneCount}/{data.habits.length} heute erledigt
+        </p>
+      </div>
+      <ProgressBar value={doneCount} max={Math.max(data.habits.length, 1)} color={doneCount === data.habits.length ? N.green : N.accent} />
+
+      <div style={{ height: "16px" }} />
+
+      {data.habits.map(h => {
+        const done = !!todayHabits[h.id];
+        const streak = getStreak(h.id);
+        return (
+          <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${N.border}` }}>
+            <div style={row}>
+              <Checkbox checked={done} label={h.name} onChange={() => toggleHabit(h.id)} />
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                {streak > 0 && (
+                  <span style={{ ...tag(N.accent, N.accentBg), fontSize: "11px" }}> {streak}d</span>
+                )}
+                <button onClick={() => setData(d => ({ ...d, habits: d.habits.filter(x => x.id !== h.id) }))}
+                  style={{ background: "none", border: "none", color: N.textMuted, cursor: "pointer", fontSize: "16px", padding: "0 2px" }}>
+                  ×
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{ marginTop: "16px" }}>
+        <h3 style={h3}>Neuer Habit</h3>
+        <div style={{ display: "flex", gap: "6px" }}>
+<input style={inputStyle} placeholder="Habit Name..." value={newHabit}
+            onChange={e => setNewHabit(e.target.value)} onKeyDown={e => e.key === "Enter" && addHabit()} />
+          <button style={btnPrimary} onClick={addHabit}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SKILLS ────────────────────────────────────────────────────────────────────
+function Skills({ data, setData }) {
+  const [newSkill, setNewSkill] = useState("");
+  const [sessionModal, setSessionModal] = useState(null);
+  const [sessionNote, setSessionNote] = useState("");
+
+  const LEVEL = (p) => p < 20 ? "Anfänger" : p < 50 ? "Lernend" : p < 75 ? "Fortgeschritten" : "Expert";
+  const LEVEL_COLOR = (p) => [N.textPrimary, N.bgSecondary];
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        
+        <h1 style={h1}>Skills</h1>
+      </div>
+      <div style={divider} />
+
+      {data.skills.map(s => {
+        const [lc, lb] = LEVEL_COLOR(s.progress);
+        return (
+          <div key={s.id} style={{ ...card, marginBottom: "10px" }}>
+            <div style={{ ...row, marginBottom: "8px" }}>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: "600" }}>{s.name}</div>
+                <div style={{ display: "flex", gap: "6px", marginTop: "3px", alignItems: "center" }}>
+                  <span style={tag(lc, lb)}>{LEVEL(s.progress)}</span>
+                  <span style={{ fontSize: "11px", color: N.textMuted }}>{s.sessions} Sessions</span>
+                  {s.lastSession && <span style={{ fontSize: "11px", color: N.textMuted }}>· {fmtDate(s.lastSession)}</span>}
+                </div>
+              </div>
+              <div style={{ fontSize: "24px", fontWeight: "700", color: lc }}>{s.progress}%</div>
+            </div>
+            <ProgressBar value={s.progress} max={100} color={lc} />
+            <div style={{ ...row, marginTop: "10px" }}>
+              <input type="range" min="0" max="100" value={s.progress} style={{ flex: 1, accentColor: N.accent }}
+                onChange={e => setData(d => ({ ...d, skills: d.skills.map(x => x.id === s.id ? { ...x, progress: +e.target.value } : x) }))} />
+              <button style={{ ...btnSecondary, padding: "4px 10px", fontSize: "12px" }}
+                onClick={() => { setSessionModal(s.id); setSessionNote(""); }}>
+                + Session
+              </button>
+              <button onClick={() => setData(d => ({ ...d, skills: d.skills.filter(x => x.id !== s.id) }))}
+                style={{ background: "none", border: "none", color: N.textMuted, cursor: "pointer", fontSize: "16px" }}>×</button>
+            </div>
+            {sessionModal === s.id && (
+              <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${N.border}` }}>
+                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: "60px" }}
+                  placeholder="Was hast du heute gelernt?" value={sessionNote}
+                  onChange={e => setSessionNote(e.target.value)} />
+                <div style={{ ...row, marginTop: "6px" }}>
+                  <button style={btnPrimary} onClick={() => {
+                    setData(d => ({ ...d, skills: d.skills.map(x => x.id === s.id ? { ...x, sessions: x.sessions + 1, lastSession: today(), lastNote: sessionNote } : x) }));
+                    setSessionModal(null);
+                  }}>Session loggen</button>
+                  <button style={btnSecondary} onClick={() => setSessionModal(null)}>Abbrechen</button>
+                </div>
+              </div>
+            )}
+            {s.lastNote && sessionModal !== s.id && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: N.textSecondary, fontStyle: "italic" }}>
+                "{s.lastNote}"
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div style={{ marginTop: "8px" }}>
+        <h3 style={h3}>Neuer Skill</h3>
+        <div style={{ display: "flex", gap: "6px" }}>
+          <input style={inputStyle} placeholder="z.B. Spanish, Python, Gitarre..." value={newSkill}
+            onChange={e => setNewSkill(e.target.value)} onKeyDown={e => e.key === "Enter" && (() => {
+              if (!newSkill.trim()) return;
+              setData(d => ({ ...d, skills: [...d.skills, { id: Date.now(), name: newSkill, progress: 0, sessions: 0 }] }));
+              setNewSkill("");
+            })()} />
+          <button style={btnPrimary} onClick={() => {
+            if (!newSkill.trim()) return;
+            setData(d => ({ ...d, skills: [...d.skills, { id: Date.now(), name: newSkill, progress: 0, sessions: 0 }] }));
+            setNewSkill("");
+          }}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BIBLE ─────────────────────────────────────────────────────────────────────
+const VERSES = [
+  { ref: "Jer 29:11", text: "Denn ich weiß, was ich für euch geplant habe, spricht der Herr." },
+  { ref: "Phil 4:13", text: "Ich vermag alles durch den, der mich stark macht." },
+  { ref: "Röm 8:28", text: "Wir wissen, dass Gott bei denen, die ihn lieben, alles zum Guten führt." },
+  { ref: "Spr 3:5-6", text: "Vertrau auf den Herrn mit ganzem Herzen und stütz dich nicht auf dein eigenes Verstehen." },
+  { ref: "Jes 40:31", text: "Die auf den Herrn hoffen, bekommen neue Kraft." },
+  { ref: "Ps 23:1", text: "Der Herr ist mein Hirte, mir wird nichts mangeln." },
+  { ref: "Mt 6:33", text: "Sucht zuerst das Reich Gottes und seine Gerechtigkeit." },
+  { ref: "2Tim 1:7", text: "Gott hat uns nicht einen Geist der Furcht gegeben, sondern der Kraft, der Liebe und der Besonnenheit." },
+  { ref: "Ps 46:11", text: "Seid still und erkennt, dass ich Gott bin." },
+  { ref: "Gal 6:9", text: "Lasst uns nicht müde werden, Gutes zu tun." },
+];
+
+function Bible({ data, setData }) {
+  const t = today();
+  const entry = data.bibleLog[t] || {};
+  const [verse, setVerse] = useState(entry.verse || "");
+  const [reflection, setReflection] = useState(entry.reflection || "");
+  const [saved, setSaved] = useState(false);
+
+  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const suggested = VERSES[doy % VERSES.length];
+
+  const bibleStreak = (() => {
+    let s = 0, d = new Date();
+    while (data.bibleLog[d.toISOString().slice(0, 10)]?.verse) { s++; d.setDate(d.getDate() - 1); }
+    return s;
+  })();
+
+  const save = () => {
+    setData(d => ({ ...d, bibleLog: { ...d.bibleLog, [t]: { verse, reflection } } }));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ padding: "24px 16px" }}>
+      <div style={{ marginBottom: "8px" }}>
+        
+        <h1 style={h1}>Daily Bible</h1>
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <span style={tag(N.accent, N.accentBg)}> {bibleStreak} Tage Streak</span>
+          <span style={tag(N.blue, N.blueBg)}>{Object.keys(data.bibleLog).filter(k => data.bibleLog[k]?.verse).length} Einträge</span>
+        </div>
+      </div>
+      <div style={divider} />
+
+      {/* Daily verse suggestion */}
+      <h3 style={h3}>Vers des Tages</h3>
+      <div style={{ ...card, background: N.accentLight, borderLeft: `3px solid ${N.accent}`, borderRadius: `0 ${N.radiusMd} ${N.radiusMd} 0`, marginBottom: "16px" }}>
+        <div style={{ fontSize: "13px", fontStyle: "italic", color: N.textPrimary, lineHeight: "1.6", marginBottom: "4px" }}>
+          "{suggested.text}"
+        </div>
+        <div style={{ ...row }}>
+          <span style={{ fontSize: "12px", fontWeight: "600", color: N.accent }}>{suggested.ref}</span>
+          <button onClick={() => setVerse(`${suggested.ref} — "${suggested.text}"`)}
+            style={{ ...btnSecondary, padding: "3px 10px", fontSize: "12px" }}>Übernehmen</button>
+        </div>
+      </div>
+
+      {/* Today's entry */}
+      <h3 style={h3}>Mein Eintrag heute</h3>
+      <div style={{ marginBottom: "8px" }}>
+        <input style={{ ...inputStyle, marginBottom: "8px" }} placeholder="Vers / Bibelstelle (z.B. Ps 23:1)"
+          value={verse} onChange={e => setVerse(e.target.value)} />
+        <textarea style={{ ...inputStyle, resize: "vertical", minHeight: "80px" }}
+          placeholder="Reflexion, Gedanken, Gebet..." value={reflection} onChange={e => setReflection(e.target.value)} />
+        <button style={{ ...btnPrimary, width: "100%", marginTop: "8px", textAlign: "center" }} onClick={save}>
+          {saved ? " Gespeichert" : "Speichern"}
+        </button>
+      </div>
+
+      <div style={divider} />
+
+      {/* History */}
+      <h3 style={h3}>Letzte Einträge</h3>
+      {Object.entries(data.bibleLog).filter(([, v]) => v.verse).sort(([a], [b]) => b.localeCompare(a)).slice(0, 8).map(([date, e]) => (
+        <div key={date} style={{ padding: "10px 0", borderBottom: `1px solid ${N.border}` }}>
+          <div style={{ ...row, marginBottom: "3px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600" }}>{e.verse}</span>
+            <span style={{ fontSize: "11px", color: N.textMuted, flexShrink: 0 }}>{fmtDate(date)}</span>
+          </div>
+          {e.reflection && <div style={{ fontSize: "13px", color: N.textSecondary, fontStyle: "italic" }}>{e.reflection}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [data, setDataRaw] = useState(loadData);
+
+  const setData = useCallback((updater) => {
+    setDataRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveData(next);
+      return next;
+    });
+  }, []);
+
+  const PAGES = { dashboard: Dashboard, body: Body, gym: Gym, finance: Finance, habits: Habits, skills: Skills, bible: Bible };
+  const Page = PAGES[tab];
+
+  return (
+    <div style={pageStyle}>
+      <Page data={data} setData={setData} />
+
+      {/* Bottom navigation — clean Notion-style */}
+      <nav style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        background: "rgba(255,255,255,0.95)",
+        backdropFilter: "blur(8px)",
+        borderTop: `1px solid ${N.border}`,
+        display: "flex", justifyContent: "space-around",
+        padding: "6px 0 10px",
+        zIndex: 100,
+      }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => setTab(n.id)} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "2px",
+            background: "none", border: "none", cursor: "pointer",
+            padding: "4px 6px",
+            fontFamily: N.fontBody,
+          }}>
+            
+            <span style={{
+              fontSize: "9px", fontWeight: "600",
+              letterSpacing: "0.04em",
+              color: tab === n.id ? N.accent : N.textMuted,
+              textTransform: "uppercase",
+            }}>{n.label}</span>
+            {tab === n.id && (
+              <div style={{ width: "16px", height: "2px", background: N.accent, borderRadius: "1px", marginTop: "1px" }} />
+            )}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
